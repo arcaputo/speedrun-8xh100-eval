@@ -7,7 +7,7 @@ Each scoring times the candidate against its parent's code **on the same machine
 | File | What it is |
 |---|---|
 | `eval.toml` | Runs `python bench.py`; `train_time_s` is the primary metric, lower is better |
-| `job.toml` | `python:3.12`, 8×H100 (GCP a3-highgpu-8g, spot, 3 retries), 32+ CPUs, 256+ GB, 90 min limit |
+| `job.toml` | `python:3.12`, 8×H100 (GCP a3-highgpu-8g, spot, 3 retries), 32+ CPUs, 256+ GB, 130 min limit |
 | `requirements.txt` | The speedrun's pinned stack: torch 2.10.0+cu128, `kernels` (FA3 from the HF hub), CUDA 12.8 header wheels, scipy |
 | `bench.py` | Fetches the data, rebuilds the parent, runs both N times, parses logs, runs the t-test |
 
@@ -67,7 +67,8 @@ has at least 4 candidate runs.
 
 ## Notes
 
-- Cost: about 60–75 minutes of one a3-highgpu-8g, around $50/hour on spot.
+- Cost: a node's scoring takes about 100–110 minutes of one a3-highgpu-8g (the base's 10 runs about 70), around $50/hour on spot,
+  plus 5–20 minutes waiting for the machine. Measured on the base: the first run 672 s of wall time, later ones 392 s.
 - Kupanga cuts the changes diff at 400,000 characters. A candidate that changes more than that can't
   have its parent rebuilt, so keep each node to one technique. (#92's whole diff is 548,000.)
 - Local check, no GPU: `python bench.py --parse <log.txt> ...` parses saved speedrun logs and prints the

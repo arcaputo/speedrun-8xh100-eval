@@ -2,8 +2,10 @@
 # It has no CUDA toolkit: the CUDA headers come from NVIDIA's pip wheels (requirements.txt, bench.py's cuda_home).
 image = "python:3.12"
 requirements = "requirements.txt"
-# 14 runs of ~3-4 min (the first of each code compiles for ~7 min), ~5 min of setup and data.
-timeout_s = 5400
+# Measured on the base (a3-highgpu-8g): the first run of a code takes ~11 min (compiling), later runs ~6.5 min
+# (startup, cache-hit compile, warmup and validation around ~75 s of train_time). A node's 10 + 4 runs with two
+# codes compiling come to ~100 min, plus a few minutes of setup and data.
+timeout_s = 7800
 # A preempted spot run starts over from scratch; SkyPilot may recover it up to this many times.
 max_retries = 3
 
