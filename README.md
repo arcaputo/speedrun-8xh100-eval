@@ -8,7 +8,7 @@ Each scoring times the candidate against its parent's code **on the same machine
 |---|---|
 | `eval.toml` | Runs `python bench.py`; `train_time_s` is the primary metric, lower is better |
 | `job.toml` | `python:3.12`, 8×H100 (GCP a3-highgpu-8g, spot, 3 retries), 32+ CPUs, 256+ GB, 90 min limit |
-| `requirements.txt` | The speedrun's pinned stack: torch 2.10.0+cu128, `kernels` (FA3 from the HF hub), scipy |
+| `requirements.txt` | The speedrun's pinned stack: torch 2.10.0+cu128, `kernels` (FA3 from the HF hub), CUDA 12.8 header wheels, scipy |
 | `bench.py` | Fetches the data, rebuilds the parent, runs both N times, parses logs, runs the t-test |
 
 ## What it does
@@ -32,6 +32,16 @@ Each scoring times the candidate against its parent's code **on the same machine
 A candidate whose mean val_loss isn't below 3.28 with p < 0.01 gets **no score**, because a time only
 counts at the target loss. The error message still gives its times. If a run crashes or times out, the
 candidate gets no score either, and the message shows the run's last output.
+
+## Environment
+
+`python:3.12` has no CUDA toolkit, but the subject compiles NVRTC kernels at import time (`#include <cuda_bf16.h>`),
+and torch's `_compile_kernel` needs `CUDA_HOME`. So `bench.py` merges the include folders of NVIDIA's pip wheels
+(`nvidia-cuda-runtime-cu12`, `-nvcc-` for `crt/`, `-cccl-`) into one CUDA root, sets `CUDA_HOME` to it, and links it at
+`/usr/local/cuda`, which #87's kernel names. The `pytorch/pytorch` CUDA images aren't an option: their system Python
+refuses Kupanga's plain `pip install` (PEP 668). Before the first run, the subject's `get_kernel(...)` hub kernels
+are fetched once, so the 8 ranks don't all download them into one cache at the same moment. A failed run shows
+the first rank's traceback.
 
 ## Rules
 

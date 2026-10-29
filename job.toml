@@ -1,4 +1,5 @@
 # python:3.12 (not -slim): Triton compiles a small C helper and needs gcc; git rebuilds the parent's code.
+# It has no CUDA toolkit: the CUDA headers come from NVIDIA's pip wheels (requirements.txt, bench.py's cuda_home).
 image = "python:3.12"
 requirements = "requirements.txt"
 # 14 runs of ~3-4 min (the first of each code compiles for ~7 min), ~5 min of setup and data.

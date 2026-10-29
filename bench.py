@@ -117,6 +117,10 @@ def parent_code(subject: Path, work: Path) -> Path | None:
                          "for the same-node baseline")
     dest = work / "subjects" / subject.name
     shutil.copytree(subject, dest, symlinks=True, ignore=shutil.ignore_patterns("logs", "__pycache__"))
+    if shutil.which("git") is None:  # the PyTorch image has none; the job runs as root
+        print("installing git to rebuild the parent", flush=True)
+        subprocess.run("apt-get update -qq && apt-get install -y -qq --no-install-recommends git", shell=True,
+                       check=True, capture_output=True, env={**os.environ, "DEBIAN_FRONTEND": "noninteractive"})
     p = subprocess.run(["git", "apply", "-R", "--whitespace=nowarn", changes], cwd=work, capture_output=True, text=True)
     if p.returncode != 0:
         raise SystemExit(f"could not rebuild the parent from the candidate's changes: {p.stderr.strip()[:500]}")
@@ -235,6 +239,29 @@ def summarize(cand: list[dict], base: list[dict]) -> dict:
     return out
 
 
+def cuda_home(root: Path) -> str:
+    """A CUDA root with the headers NVRTC needs, for kernels the subject compiles at import (torch's
+    _compile_kernel includes $CUDA_HOME/include; #87's kernel also names /usr/local/cuda/include). python:3.12
+    has no CUDA toolkit, so merge the include folders of NVIDIA's pip wheels (runtime, nvcc's crt/, cccl)."""
+    if (Path("/usr/local/cuda") / "include" / "cuda_bf16.h").is_file():
+        return "/usr/local/cuda"
+    import importlib.util
+
+    inc = root / "include"
+    inc.mkdir(parents=True)
+    for pkg in ("cuda_runtime", "cuda_nvcc", "cuda_cccl"):
+        spec = importlib.util.find_spec(f"nvidia.{pkg}")
+        src = Path(next(iter(spec.submodule_search_locations))) / "include" if spec else None
+        if src is None or not src.is_dir():
+            raise SystemExit(f"no CUDA headers from nvidia-{pkg.replace('_', '-')}-cu12; is it in requirements.txt?")
+        shutil.copytree(src, inc, dirs_exist_ok=True)
+    try:
+        Path("/usr/local/cuda").symlink_to(root)
+    except OSError as e:
+        print(f"could not link /usr/local/cuda to the headers ({e}); CUDA_HOME still points at them", flush=True)
+    return str(root)
+
+
 def gpu_info() -> str:
     try:
         return subprocess.run(["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"],
@@ -255,6 +282,9 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="speedrun-") as tmp:
         tmp = Path(tmp)
         prepare_data(tmp / "dataroot")
+        if "CUDA_HOME" not in os.environ:
+            os.environ["CUDA_HOME"] = cuda_home(tmp / "cuda")
+        print(f"CUDA_HOME={os.environ['CUDA_HOME']}", flush=True)
         work = tmp / "work"
         cand_code = work / "candidate" / subject.name
         shutil.copytree(subject, cand_code, symlinks=True, ignore=shutil.ignore_patterns("logs", "__pycache__"))

@@ -3,6 +3,11 @@
 # Hugging Face hub through `kernels` at import time.
 --extra-index-url https://download.pytorch.org/whl/cu128
 torch==2.10.0+cu128
+# CUDA headers for the NVRTC kernels the subject compiles at import (python:3.12 has no CUDA toolkit);
+# bench.py merges their include folders into CUDA_HOME. Same CUDA 12.8 as torch's own runtime wheel.
+nvidia-cuda-runtime-cu12==12.8.90
+nvidia-cuda-nvcc-cu12==12.8.93
+nvidia-cuda-cccl-cu12==12.8.90
 numpy
 tqdm
 huggingface-hub==1.29.0
