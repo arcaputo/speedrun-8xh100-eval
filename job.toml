@@ -1,0 +1,14 @@
+# python:3.12 (not -slim): Triton compiles a small C helper and needs gcc; git rebuilds the parent's code.
+image = "python:3.12"
+requirements = "requirements.txt"
+# 14 runs of ~3-4 min (the first of each code compiles for ~7 min), ~5 min of setup and data.
+timeout_s = 5400
+# A preempted spot run starts over from scratch; SkyPilot may recover it up to this many times.
+max_retries = 3
+
+[resources]
+cpus = "32+"
+memory = "256+"
+# 8×H100 on GCP is a3-highgpu-8g: SXM on an HGX board with NVLink, as the speedrun needs.
+accelerators = "H100:8"
+use_spot = true

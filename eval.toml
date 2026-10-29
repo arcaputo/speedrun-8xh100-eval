@@ -1,0 +1,94 @@
+[eval]
+type = "other"
+evaluator = "deterministic"
+entrypoint = "python bench.py"
+
+[eval.schema.train_time_s]
+type = "float"
+primary = true
+better = "lower"
+display = "{:.2f}"
+description = "Mean train_time of the candidate's runs on 8×H100, seconds, compile and warmup excluded as on the speedrun leaderboard; scored only when the mean val_loss is below 3.28 with p < 0.01 (lower is better)"
+
+[eval.schema.train_time_s_se]
+type = "float"
+display = "{:.2f}"
+description = "Standard error of train_time_s over the candidate's runs"
+
+[eval.schema.val_loss]
+type = "float"
+display = "{:.4f}"
+description = "Mean final val_loss of the candidate's runs on the speedrun's 10,485,760 val tokens (lower is better; the target is 3.28)"
+
+[eval.schema.val_loss_se]
+type = "float"
+display = "{:.4f}"
+description = "Standard error of val_loss over the candidate's runs"
+
+[eval.schema.p_value]
+type = "float"
+display = "{:.2g}"
+description = "One-sided one-sample t-test that the mean val_loss is below 3.28 (the speedrun requires p < 0.01)"
+
+[eval.schema.runs]
+type = "int"
+description = "Candidate runs"
+
+[eval.schema.steps]
+type = "int"
+description = "Training steps in a candidate run"
+
+[eval.schema.target]
+type = "float"
+display = "{:.2f}"
+description = "The speedrun's val_loss target"
+
+[eval.schema.baseline_runs]
+type = "int"
+description = "Runs of the parent's code on the same node (0 on the base node)"
+
+[eval.schema.baseline_train_time_s]
+type = "float"
+display = "{:.2f}"
+optional = true
+description = "Mean train_time of the parent's code on the same node, seconds"
+
+[eval.schema.baseline_val_loss]
+type = "float"
+display = "{:.4f}"
+optional = true
+description = "Mean val_loss of the parent's code on the same node"
+
+[eval.schema.baseline_steps]
+type = "int"
+optional = true
+description = "Training steps in a parent run"
+
+[eval.schema.time_delta_s]
+type = "float"
+display = "{:+.2f}"
+optional = true
+description = "Candidate minus parent mean train_time on the same node, seconds (lower is better)"
+
+[eval.schema.time_delta_s_se]
+type = "float"
+display = "{:.2f}"
+optional = true
+description = "Standard error of time_delta_s"
+
+[eval.schema.gpus]
+type = "int"
+description = "GPUs on the node"
+
+[eval.schema.gpu]
+type = "string"
+description = "GPU model"
+
+[eval.schema.driver]
+type = "string"
+description = "NVIDIA driver version"
+
+[eval.schema.wall_s]
+type = "float"
+display = "{:.0f}"
+description = "Eval wall time, seconds"

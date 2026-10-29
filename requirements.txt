@@ -1,0 +1,13 @@
+# The speedrun's pinned stack: torch 2.10 from the cu128 wheel index (nightlies have produced NaNs in
+# reproductions). The subject's train_gpt.py runs in this environment; its FA3 kernel comes from the
+# Hugging Face hub through `kernels` at import time.
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.10.0+cu128
+numpy
+tqdm
+huggingface-hub==1.29.0
+kernels==0.16.1
+setuptools
+typing-extensions==4.15.0
+tiktoken
+scipy
