@@ -71,10 +71,31 @@ FINAL = re.compile(r"^step:(\d+)/(\d+) val_loss:([\d.]+) train_time:(\d+)ms", re
 
 def find_subject() -> Path:
     root = Path(os.environ.get("HARNESS_SUBJECTS_DIR") or Path(__file__).resolve().parent.parent.parent / "subjects")
-    found = sorted(p.parent for p in root.glob("*/train_gpt.py"))
+    found = sorted({p.parent for p in root.glob("*/train_gpt.py")} | {p.parent.parent for p in root.glob("*/*/train_gpt.py")})
     if not found:
-        raise SystemExit(f"no modded-nanogpt checkout (train_gpt.py) under {root}/<subject>/")
+        raise SystemExit(f"no modded-nanogpt checkout (train_gpt.py) under {root}/<subject>/ or {root}/<subject>/<record>/")
     return found[0]
+
+
+def record_dir(subject: Path) -> Path:
+    """Where train_gpt.py runs, relative to the subject: its root, or, for a subject that holds several records in
+    folders of their own (subject/<record>/train_gpt.py), the one folder the candidate changed."""
+    if (subject / "train_gpt.py").is_file():
+        return Path(".")
+    records = sorted(p.parent.relative_to(subject) for p in subject.glob("*/train_gpt.py"))
+    changes = os.environ.get("HARNESS_CHANGES_FILE")
+    diff = Path(changes).read_text(errors="replace") if changes and Path(changes).is_file() else ""
+    prefix = f"subjects/{subject.name}/"
+    touched = {line.split(" ", 1)[1].strip()[2:].removeprefix(prefix).split("/", 1)[0]
+               for line in diff.splitlines() if line.startswith(("--- a/", "+++ b/"))}
+    changed = [r for r in records if str(r) in touched]
+    names = ", ".join(str(r) for r in records)
+    if not changed:
+        raise SystemExit(f"this subject holds several records ({names}) and the candidate changed none of them, so "
+                         "there is nothing to time (the base node of such a project has no run of its own)")
+    if len(changed) > 1:
+        raise SystemExit(f"the candidate changed {', '.join(map(str, changed))}; an experiment changes one record folder")
+    return changed[0]
 
 
 def fetch(name: str, dest: Path) -> Path:
@@ -274,8 +295,9 @@ def main() -> None:
     t0 = time.time()
     deadline = t0 + EVAL_TIMEOUT_S - 300  # leave time to report
     subject = find_subject()
+    rel = record_dir(subject)
     gpus = gpu_info()
-    print(f"subject: {subject}\nGPUs:\n{gpus}", flush=True)
+    print(f"subject: {subject / rel}\nGPUs:\n{gpus}", flush=True)
     names = gpus.splitlines()
     if len(names) < NPROC or not all("H100" in n for n in names):
         raise SystemExit(f"needs {NPROC}×H100, found: {gpus or 'no GPUs'}")
@@ -288,7 +310,9 @@ def main() -> None:
         work = tmp / "work"
         cand_code = work / "candidate" / subject.name
         shutil.copytree(subject, cand_code, symlinks=True, ignore=shutil.ignore_patterns("logs", "__pycache__"))
+        cand_code = cand_code / rel
         base_code = parent_code(subject, work / "parent")
+        base_code = base_code / rel if base_code is not None else None
         for code in (cand_code, base_code):
             if code is not None:
                 prefetch_kernels(code)

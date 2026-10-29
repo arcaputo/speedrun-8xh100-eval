@@ -43,6 +43,13 @@ refuses Kupanga's plain `pip install` (PEP 668). Before the first run, the subje
 are fetched once, so the 8 ranks don't all download them into one cache at the same moment. A failed run shows
 the first rank's traceback.
 
+## Subjects with several records
+
+A subject may hold one record at its root (`subjects/<name>/train_gpt.py`) or several, one folder each
+(`subjects/<name>/<record>/train_gpt.py`). In the second case the eval times the one folder the candidate
+changed, against that folder's parent code; a candidate that changes several folders, or the base node
+(which changes none), has nothing to time.
+
 ## Rules
 
 The `speedrun-rules` QA eval checks these before this eval spends GPU time:
