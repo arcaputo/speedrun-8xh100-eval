@@ -63,6 +63,9 @@ TRAIN_SHARDS = int(os.environ.get("KX_TRAIN_SHARDS", "9"))
 RUN_TIMEOUT_S = int(os.environ.get("KX_RUN_TIMEOUT_S", "1500"))
 NPROC = int(os.environ.get("KX_NPROC", "8"))
 EVAL_TIMEOUT_S = int(os.environ.get("HARNESS_EVAL_TIMEOUT_S", "5400"))
+# get_kernel("<repo>", version=N) calls in the subject: Hugging Face hub kernels it downloads at import time
+HUB_KERNEL = re.compile(r"""get_kernel\(\s*['"]([^'"]+)['"](?:\s*,\s*version\s*=\s*(\d+))?""")
+TRACEBACK = re.compile(r"^(\[rank\d+\]:\s?)?Traceback \(most recent call last\):", re.M)
 FINAL = re.compile(r"^step:(\d+)/(\d+) val_loss:([\d.]+) train_time:(\d+)ms", re.M)
 
 
@@ -120,6 +123,50 @@ def parent_code(subject: Path, work: Path) -> Path | None:
     return dest
 
 
+def prefetch_kernels(code: Path) -> None:
+    """Download the subject's hub kernels once, before torchrun: otherwise every rank downloads them into the
+    same cache at import time, and one rank losing that race fails the run in its first seconds."""
+    # train_gpt_medium.py is the other track's script (its kernel has no build for this torch); records/ is logs
+    files = [f for f in code.rglob("*.py") if f.name != "train_gpt_medium.py" and "records" not in f.parts]
+    found = sorted({(m.group(1), m.group(2)) for f in files for m in HUB_KERNEL.finditer(f.read_text(errors="replace"))})
+    for name, version in found:
+        arg = f", version={int(version)}" if version else ""
+        for attempt in range(3):
+            # in a temp dir, so the subject's own modules aren't on the path
+            p = subprocess.run([sys.executable, "-c", f"from kernels import get_kernel; get_kernel({name!r}{arg})"],
+                               cwd=tempfile.gettempdir(), capture_output=True, text=True, timeout=600)
+            if p.returncode == 0:
+                print(f"kernel {name}{arg}: cached", flush=True)
+                break
+            print(f"kernel {name}{arg}: download failed (attempt {attempt + 1})", flush=True)
+            time.sleep(10 * (attempt + 1))
+        else:
+            # not fatal: the regex can match a call the run never makes; a real failure shows in the run's traceback
+            print(f"kernel {name}{arg}: could not prefetch, the run will fetch it itself: {p.stderr.strip()[-1500:]}",
+                  flush=True)
+
+
+def failure_excerpt(out: str) -> str:
+    """The first Python traceback in a torchrun's output (any rank), then its last lines: torchrun's summary of
+    an 8-rank failure alone is longer than the tail, so the cause would otherwise be cut."""
+    lines = out.splitlines()
+    tail = "\n".join(lines[-25:])
+    m = TRACEBACK.search(out)
+    if m is None:
+        return tail
+    start = out[:m.start()].count("\n")
+    prefix = m.group(1) or ""
+    block = [lines[start]]
+    for line in lines[start + 1:start + 80]:
+        if prefix and not line.startswith(prefix.rstrip()):
+            break
+        block.append(line)
+        # the exception line ends a traceback: unindented, after the frames
+        if not prefix and line and not line[0].isspace():
+            break
+    return "First traceback:\n" + "\n".join(block) + "\n...\nLast output:\n" + tail
+
+
 def run_once(code: Path, data: Path, label: str, timeout: float) -> dict:
     """One torchrun of train_gpt.py in `code`; returns its final line's numbers."""
     shutil.rmtree(code / "logs", ignore_errors=True)
@@ -140,9 +187,9 @@ def run_once(code: Path, data: Path, label: str, timeout: float) -> dict:
     text = logs[-1].read_text(errors="replace") if logs else ""
     final = parse(text)
     if rc != 0 or final is None:
-        tail = "\n".join(out.read_text(errors="replace").splitlines()[-40:])
         why = "timed out" if rc == -9 else f"exit {rc}" if rc else "no final val_loss line"
-        raise SystemExit(f"{label}: train_gpt.py failed ({why}) after {wall:.0f}s; no score. Last output:\n{tail}")
+        raise SystemExit(f"{label}: train_gpt.py failed ({why}) after {wall:.0f}s; no score. "
+                         f"{failure_excerpt(out.read_text(errors='replace'))}")
     print(f"{label}: val_loss {final['val_loss']:.4f}  train_time {final['train_time_s']:.3f}s  "
           f"steps {final['steps']}  wall {wall:.0f}s", flush=True)
     return {**final, "wall_s": wall}
@@ -212,6 +259,9 @@ def main() -> None:
         cand_code = work / "candidate" / subject.name
         shutil.copytree(subject, cand_code, symlinks=True, ignore=shutil.ignore_patterns("logs", "__pycache__"))
         base_code = parent_code(subject, work / "parent")
+        for code in (cand_code, base_code):
+            if code is not None:
+                prefetch_kernels(code)
         # Candidate and parent alternate (c, p, c, c, p, ...) so both see the node's drift; the parent goes
         # second so the candidate's first run (which compiles) can't make the parent look faster.
         every = max(1, RUNS // max(BASELINE_RUNS, 1))
