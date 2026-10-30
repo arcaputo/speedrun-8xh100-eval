@@ -18,7 +18,7 @@ Each scoring times the candidate against its parent's code **on the same machine
 2. Rebuilds the parent's code by reverse-applying `$HARNESS_CHANGES_FILE` (what the candidate changed
    since its experiment started) to a copy of the subject. The base node has no parent, so it is
    timed on its own.
-3. Runs `torchrun --standalone --nproc_per_node=8 train_gpt.py` 10 times for the candidate and 4 times
+3. Runs `torchrun --standalone --nproc_per_node=8 train_gpt.py` 5 times for the candidate and 3 times
    for the parent, alternating (c p c c p c c p …), so drift on the machine affects both. The
    compile cache is shared, so only the first run of each code compiles (about 7 minutes).
 4. Reads each run's last `step:N/N val_loss:X train_time:Yms` line from `logs/<uuid>.txt`.
@@ -64,8 +64,8 @@ This eval trusts the run's own validation, as the speedrun does: it doesn't scor
 
 | Variable | Default | |
 |---|---|---|
-| `KX_RUNS` | 10 | Candidate runs. At #87's spread (about 0.0013), 8 runs only just reach p < 0.01 |
-| `KX_BASELINE_RUNS` | 4 | Parent runs (time noise is about 0.1 s) |
+| `KX_RUNS` | 5 | Candidate runs. Five reach p < 0.01 when the mean is about 0.002 under 3.28 at the speedrun's spread (about 0.001); a mean closer to 3.28 needs more |
+| `KX_BASELINE_RUNS` | 3 | Parent runs (time noise is about 0.1 s) |
 | `KX_TRAIN_SHARDS` | 9 | Training shards of 100M tokens |
 | `KX_RUN_TIMEOUT_S` | 1500 | First run of each code; later runs get half |
 

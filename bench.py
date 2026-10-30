@@ -20,7 +20,7 @@ A candidate whose mean val_loss isn't below 3.28 with p < 0.01 gets no score: a 
 target loss. The rules a candidate must keep (val_tokens, the data, no compiler flags) are checked by the
 speedrun-rules QA eval before this one runs.
 
-Environment variables: KX_RUNS (10), KX_BASELINE_RUNS (4), KX_TRAIN_SHARDS (9), KX_RUN_TIMEOUT_S (1500,
+Environment variables: KX_RUNS (5), KX_BASELINE_RUNS (3), KX_TRAIN_SHARDS (9), KX_RUN_TIMEOUT_S (1500,
 the first run of each code compiles for several minutes), KX_NPROC (8).
 
 Local check of the parsing and statistics, no GPU: python bench.py --parse <log.txt> [<log.txt> ...]
@@ -56,8 +56,8 @@ def report(result: dict) -> None:
 DATA_URL = "https://huggingface.co/datasets/kjj0/fineweb10B-gpt2/resolve/main"  # cached_fineweb10B.py's source
 TARGET = 3.28  # the speedrun's val_loss target
 ALPHA = 0.01  # the speedrun's significance level
-RUNS = int(os.environ.get("KX_RUNS", "10"))
-BASELINE_RUNS = int(os.environ.get("KX_BASELINE_RUNS", "4"))
+RUNS = int(os.environ.get("KX_RUNS", "5"))
+BASELINE_RUNS = int(os.environ.get("KX_BASELINE_RUNS", "3"))
 MIN_RUNS = 4  # fewer candidate runs than this (out of time) can't support the t-test
 TRAIN_SHARDS = int(os.environ.get("KX_TRAIN_SHARDS", "9"))
 RUN_TIMEOUT_S = int(os.environ.get("KX_RUN_TIMEOUT_S", "1500"))
