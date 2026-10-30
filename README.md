@@ -43,6 +43,11 @@ refuses Kupanga's plain `pip install` (PEP 668). Before the first run, the subje
 are fetched once, so the 8 ranks don't all download them into one cache at the same moment. A failed run shows
 the first rank's traceback.
 
+`kernels` is pinned to 0.13.0. Newer releases refuse kernels from accounts that aren't trusted Hugging Face
+organizations (0.14) and require a `version=` or `revision=` on every `get_kernel` (0.15). Records up to #86 call
+`get_kernel('varunneal/flash-attention-3')` with neither, from a personal account, so they fail at import on 0.16.1.
+0.13.0 still accepts `version=`, which #87's `kernels-community/flash-attn3` call uses.
+
 ## Subjects with several records
 
 A subject may hold one record at its root (`subjects/<name>/train_gpt.py`) or several, one folder each
