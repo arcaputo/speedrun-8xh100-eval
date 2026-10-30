@@ -16,11 +16,11 @@ subjects/<name>/. On one 8×H100 SXM machine the eval:
      val_loss with the speedrun's one-sided t-test against 3.28 (scipy.stats.ttest_1samp(losses, 3.28,
      alternative="less")), and the time difference from the parent measured on this node.
 
-A candidate whose mean val_loss isn't below 3.28 with p < 0.01 gets no score: a time only counts at the
-target loss. The rules a candidate must keep (val_tokens, the data, no compiler flags) are checked by the
+A candidate whose mean val_loss isn't below 3.28 with p < 0.01 is reported with meets_target = 0: a time only
+counts at the target loss. The rules a candidate must keep (val_tokens, the data, no compiler flags) are checked by the
 speedrun-rules QA eval before this one runs.
 
-Environment variables: KX_RUNS (5), KX_BASELINE_RUNS (3), KX_TRAIN_SHARDS (9), KX_RUN_TIMEOUT_S (1500,
+Environment variables: KX_RUNS (8), KX_BASELINE_RUNS (3), KX_TRAIN_SHARDS (9), KX_RUN_TIMEOUT_S (1500,
 the first run of each code compiles for several minutes), KX_NPROC (8).
 
 Local check of the parsing and statistics, no GPU: python bench.py --parse <log.txt> [<log.txt> ...]
@@ -56,7 +56,7 @@ def report(result: dict) -> None:
 DATA_URL = "https://huggingface.co/datasets/kjj0/fineweb10B-gpt2/resolve/main"  # cached_fineweb10B.py's source
 TARGET = 3.28  # the speedrun's val_loss target
 ALPHA = 0.01  # the speedrun's significance level
-RUNS = int(os.environ.get("KX_RUNS", "5"))
+RUNS = int(os.environ.get("KX_RUNS", "8"))
 BASELINE_RUNS = int(os.environ.get("KX_BASELINE_RUNS", "3"))
 MIN_RUNS = 4  # fewer candidate runs than this (out of time) can't support the t-test
 TRAIN_SHARDS = int(os.environ.get("KX_TRAIN_SHARDS", "9"))
@@ -182,13 +182,16 @@ def failure_excerpt(out: str) -> str:
     start = out[:m.start()].count("\n")
     prefix = m.group(1) or ""
     block = [lines[start]]
-    for line in lines[start + 1:start + 80]:
+    for line in lines[start + 1:]:
         if prefix and not line.startswith(prefix.rstrip()):
             break
         block.append(line)
         # the exception line ends a traceback: unindented, after the frames
         if not prefix and line and not line[0].isspace():
             break
+    # Inductor's tracebacks run to hundreds of lines and end in the error that matters, so keep both ends
+    if len(block) > 60:
+        block = block[:25] + [f"... ({len(block) - 50} lines of frames) ..."] + block[-25:]
     return "First traceback:\n" + "\n".join(block) + "\n...\nLast output:\n" + tail
 
 
@@ -348,11 +351,12 @@ def main() -> None:
         print(f"parent on this node: train_time {res['baseline_train_time_s']:.3f}s, val_loss "
               f"{res['baseline_val_loss']:.4f}; delta {res['time_delta_s']:+.3f} ± {res['time_delta_s_se']:.3f}s",
               flush=True)
-    if not (res["val_loss"] < TARGET and res["p_value"] < ALPHA):
-        raise SystemExit(f"val_loss {res['val_loss']:.4f} over {res['runs']} runs is not below {TARGET} with "
-                         f"p < {ALPHA} (p = {res['p_value']:.3g}); a time only counts at the target loss. No score. "
-                         f"Times: train_time {res['train_time_s']:.3f}s"
-                         + (f", parent {res['baseline_train_time_s']:.3f}s" if base else ""))
+    # A miss is reported, not raised: the times and losses still show in the tree, and meets_target says whether the
+    # time counts. (Raised, it would read as a crash, which hides the numbers and can't be told from a real one.)
+    res["meets_target"] = int(res["val_loss"] < TARGET and res["p_value"] < ALPHA)
+    if not res["meets_target"]:
+        print(f"val_loss {res['val_loss']:.4f} over {res['runs']} runs is not below {TARGET} with p < {ALPHA} "
+              f"(p = {res['p_value']:.3g}): the time does not count (meets_target = 0)", flush=True)
     report(res)
 
 

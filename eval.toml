@@ -8,7 +8,7 @@ type = "float"
 primary = true
 better = "lower"
 display = "{:.2f}"
-description = "Mean train_time of the candidate's runs on 8×H100, seconds, compile and warmup excluded as on the speedrun leaderboard; scored only when the mean val_loss is below 3.28 with p < 0.01 (lower is better)"
+description = "Mean train_time of the candidate's runs on 8×H100, seconds, compile and warmup excluded as on the speedrun leaderboard; it counts only when meets_target is 1 (lower is better)"
 
 [eval.schema.train_time_s_se]
 type = "float"
@@ -29,6 +29,10 @@ description = "Standard error of val_loss over the candidate's runs"
 type = "float"
 display = "{:.2g}"
 description = "One-sided one-sample t-test that the mean val_loss is below 3.28 (the speedrun requires p < 0.01)"
+
+[eval.schema.meets_target]
+type = "int"
+description = "1 if the mean val_loss is below 3.28 with p < 0.01 (the speedrun's rule), else 0: the time only counts at 1"
 
 [eval.schema.runs]
 type = "int"
